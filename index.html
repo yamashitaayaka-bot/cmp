@@ -1,0 +1,192 @@
+
+<style>
+  #wrap { padding: 1rem 0; font-family: var(--font-sans); }
+  #controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.5rem; font-size: 12px; color: var(--color-text-secondary); }
+  .axis-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 4px 10px; border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); background: var(--color-background-secondary); user-select: none; }
+  .axis-toggle input { accent-color: var(--color-text-info); }
+  #tooltip { position: absolute; pointer-events: none; opacity: 0; transition: opacity .15s; background: var(--color-background-primary); border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); padding: 8px 12px; font-size: 12px; max-width: 240px; z-index: 10; line-height: 1.6; }
+  canvas { display: block; width: 100%; cursor: crosshair; }
+</style>
+<div id="wrap">
+  <div id="controls">
+    <label class="axis-toggle"><input type="checkbox" id="ax1" checked> Tangible ↔ Intangible output</label>
+    <label class="axis-toggle"><input type="checkbox" id="ax2" checked> Community scale ↔ Global agenda</label>
+    <label class="axis-toggle"><input type="checkbox" id="ax3"> Change in short-term ↔ Long-term</label>
+    <label class="axis-toggle"><input type="checkbox" id="ax4"> Classic approach ↔ Emerging approach</label>
+  </div>
+  <div style="position:relative">
+    <canvas id="c"></canvas>
+    <div id="tooltip"></div>
+  </div>
+</div>
+
+<script>
+// dims: [tangible(0)-intangible(100), community(0)-global(100), short-change(0)-long-change(100), classic(0)-emerging(100)]
+const CMPS = [
+  { n:'CMP1',  title:'Health',        dims:[50, 30, 35, 30], note:'Approach: participatory design, experience design\nChange: care interventions shift at community level' },
+  { n:'CMP2',  title:'Food',          dims:[30, 65, 60, 80], note:'Approach: biodesign, systemic design\nChange: food system shifts take time but prototypes are near-term' },
+  { n:'CMP3',  title:'Climate',       dims:[80, 90, 85, 70], note:'Approach: speculative design, GIS storytelling\nChange: climate transformation is generational' },
+  { n:'CMP4',  title:'Disaster',      dims:[45, 28, 75, 25], note:'Approach: service design, communication design\nChange: resilience is built over the long term' },
+  { n:'CMP5',  title:'Culture',       dims:[15, 18, 85, 20], note:'Approach: design anthropology, craft & product design\nChange: cultural continuity unfolds across generations' },
+  { n:'CMP6',  title:'Technology',    dims:[85, 60, 20, 90], note:'Approach: critical design, interaction design with AI\nChange: technology outputs shift behaviour quickly' },
+  { n:'CMP7',  title:'Entertainment', dims:[75, 45, 40, 72], note:'Approach: inclusive design, media design\nChange: accessible formats shift norms at medium-term' },
+  { n:'CMP8',  title:'Equity',        dims:[70, 75, 65, 58], note:'Approach: business design, social entrepreneurship\nChange: ventures launch short-term, systemic equity takes longer' },
+  { n:'CMP9',  title:'Law',           dims:[75, 70, 75, 55], note:'Approach: systemic design, policy design\nChange: legal reform is inherently long-term' },
+  { n:'CMP10', title:'Education',     dims:[35, 50, 50, 62], note:'Approach: process design, participatory workshop design\nChange: practice shifts are medium-term; systemic reform is slow' },
+  { n:'CMP11', title:'Ecosystems',    dims:[50, 55, 82, 50], note:'Approach: regenerative design, urban design\nChange: ecological transformation unfolds over long timescales' },
+  { n:'CMP12', title:'Governance',    dims:[82, 85, 72, 65], note:'Approach: data design, policy-oriented design\nChange: institutional reform is slow and structural' },
+];
+
+const AXES = [
+  { id:'ax1', left:'Tangible output', right:'Intangible output', dim:0 },
+  { id:'ax2', left:'Community scale', right:'Global agenda', dim:1 },
+  { id:'ax3', left:'Change in short-term', right:'Change in long-term', dim:2 },
+  { id:'ax4', left:'Classic design approach', right:'Emerging design approach', dim:3 },
+];
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const tip = document.getElementById('tooltip');
+let W, H, PAD = 64, INNER_W, INNER_H;
+let activeAxes = [0, 1];
+let hoveredCMP = null;
+
+function isDark() { return matchMedia('(prefers-color-scheme: dark)').matches; }
+function toCanvas(x, y) {
+  return { cx: PAD + (x/100)*INNER_W, cy: PAD + ((100-y)/100)*INNER_H };
+}
+function getDims(cmp) {
+  return { x: cmp.dims[activeAxes[0]??0], y: cmp.dims[activeAxes[1]??1] };
+}
+
+function draw() {
+  const dark = isDark();
+  const dotColor = dark ? '#c2c0b6' : '#3d3d3a';
+  const dotHovColor = dark ? '#ffffff' : '#000000';
+  const textSecondary = dark ? '#8a8880' : '#73726c';
+  const axisColor = dark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)';
+  const gridColor = dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.05)';
+
+  ctx.clearRect(0, 0, W, H);
+
+  [25,50,75].forEach(v => {
+    ctx.strokeStyle = gridColor; ctx.lineWidth = 0.5;
+    const {cx} = toCanvas(v,0); ctx.beginPath(); ctx.moveTo(cx,PAD); ctx.lineTo(cx,PAD+INNER_H); ctx.stroke();
+    const {cy} = toCanvas(0,v); ctx.beginPath(); ctx.moveTo(PAD,cy); ctx.lineTo(PAD+INNER_W,cy); ctx.stroke();
+  });
+
+  ctx.strokeStyle = axisColor; ctx.lineWidth = 1;
+  const midX = PAD+INNER_W/2, midY = PAD+INNER_H/2;
+  ctx.beginPath(); ctx.moveTo(midX,PAD); ctx.lineTo(midX,PAD+INNER_H); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(PAD,midY); ctx.lineTo(PAD+INNER_W,midY); ctx.stroke();
+
+  const ax1 = AXES[activeAxes[0]??0];
+  const ax2 = AXES[activeAxes[1]??1];
+  ctx.font = '11px var(--font-sans,sans-serif)';
+  ctx.fillStyle = textSecondary;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('← ' + ax1.left, PAD, PAD - 12);
+  ctx.textAlign = 'right';
+  ctx.fillText(ax1.right + ' →', PAD+INNER_W, PAD - 12);
+
+  ctx.save();
+  ctx.translate(16, PAD+INNER_H);
+  ctx.rotate(-Math.PI/2);
+  ctx.textAlign = 'left'; ctx.fillText('← ' + ax2.left, 0, 0);
+  ctx.restore();
+  ctx.save();
+  ctx.translate(16, PAD);
+  ctx.rotate(-Math.PI/2);
+  ctx.textAlign = 'right'; ctx.fillText(ax2.right + ' →', 0, 0);
+  ctx.restore();
+
+  CMPS.forEach(cmp => {
+    const { x, y } = getDims(cmp);
+    const { cx, cy } = toCanvas(x, y);
+    const isHov = hoveredCMP === cmp.n;
+    const r = 6;
+
+    if (isHov) {
+      ctx.beginPath(); ctx.arc(cx, cy, r+5, 0, Math.PI*2);
+      ctx.fillStyle = dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.07)';
+      ctx.fill();
+    }
+
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.fillStyle = isHov ? dotHovColor : dotColor;
+    ctx.fill();
+
+    ctx.font = isHov ? '500 12px var(--font-sans,sans-serif)' : '12px var(--font-sans,sans-serif)';
+    ctx.fillStyle = isHov ? dotHovColor : dotColor;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(cmp.title, cx + r + 5, cy);
+  });
+
+  ctx.textBaseline = 'alphabetic';
+}
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  W = rect.width; H = Math.min(480, W * 0.72);
+  canvas.width = W*dpr; canvas.height = H*dpr;
+  canvas.style.height = H+'px';
+  ctx.scale(dpr,dpr);
+  INNER_W = W-PAD*2; INNER_H = H-PAD*2;
+  draw();
+}
+
+document.querySelectorAll('.axis-toggle input').forEach(el => {
+  el.addEventListener('change', () => {
+    const axDef = AXES.find(a => a.id === el.id);
+    if (!axDef) return;
+    const dim = axDef.dim;
+    if (el.checked) {
+      if (activeAxes.length < 2) activeAxes.push(dim);
+      else activeAxes[activeAxes.length-1] = dim;
+    } else {
+      activeAxes = activeAxes.filter(d => d !== dim);
+    }
+    document.querySelectorAll('.axis-toggle input').forEach(cb => {
+      const def = AXES.find(a => a.id === cb.id);
+      if (def) cb.checked = activeAxes.includes(def.dim);
+    });
+    draw();
+  });
+});
+
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX-rect.left, my = e.clientY-rect.top;
+  let found = null;
+  CMPS.forEach(cmp => {
+    const {x,y} = getDims(cmp), {cx,cy} = toCanvas(x,y);
+    if (Math.sqrt((mx-cx)**2+(my-cy)**2) < 14) found = cmp;
+  });
+  hoveredCMP = found?.n || null;
+  if (found) {
+    const lines = found.note.split('\n');
+    tip.innerHTML = `<strong style="color:var(--color-text-primary)">${found.n}: ${found.title}</strong><br>${lines.map(l=>`<span style="color:var(--color-text-secondary);font-size:11px">${l}</span>`).join('<br>')}`;
+    tip.style.left = (e.clientX-rect.left+16)+'px';
+    tip.style.top = (e.clientY-rect.top-10)+'px';
+    tip.style.opacity = '1';
+    canvas.style.cursor = 'pointer';
+  } else {
+    tip.style.opacity = '0';
+    canvas.style.cursor = 'crosshair';
+  }
+  draw();
+});
+canvas.addEventListener('mouseleave', () => { tip.style.opacity='0'; hoveredCMP=null; draw(); });
+canvas.addEventListener('click', () => {
+  if (hoveredCMP) {
+    const c = CMPS.find(c=>c.n===hoveredCMP);
+    if (c) sendPrompt(`Tell me more about ${c.n} ${c.title} — what design approach does it use and what pace of change does it design for?`);
+  }
+});
+
+resize();
+window.addEventListener('resize', resize);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+</script>
