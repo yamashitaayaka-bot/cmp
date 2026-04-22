@@ -1,18 +1,29 @@
-
 <style>
   #wrap { padding: 1rem 0; font-family: var(--font-sans); }
-  #controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.5rem; font-size: 12px; color: var(--color-text-secondary); }
-  .axis-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 4px 10px; border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); background: var(--color-background-secondary); user-select: none; }
-  .axis-toggle input { accent-color: var(--color-text-info); }
+  #controls { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1.5rem; font-size: 12px; color: var(--color-text-secondary); }
+  .axis-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .axis-row-label { font-size: 11px; color: var(--color-text-tertiary); min-width: 28px; }
+  .axis-toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 4px 10px; border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); background: var(--color-background-secondary); user-select: none; transition: background .15s, border-color .15s; }
+  .axis-toggle input { display: none; }
+  .axis-toggle.active { background: var(--color-background-primary); border-color: var(--color-border-primary); color: var(--color-text-primary); font-weight: 500; }
   #tooltip { position: absolute; pointer-events: none; opacity: 0; transition: opacity .15s; background: var(--color-background-primary); border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); padding: 8px 12px; font-size: 12px; max-width: 240px; z-index: 10; line-height: 1.6; }
   canvas { display: block; width: 100%; cursor: crosshair; }
 </style>
+
 <div id="wrap">
   <div id="controls">
-    <label class="axis-toggle"><input type="checkbox" id="ax1" checked> Tangible ↔ Intangible output</label>
-    <label class="axis-toggle"><input type="checkbox" id="ax2" checked> Community scale ↔ Global agenda</label>
-    <label class="axis-toggle"><input type="checkbox" id="ax3"> Change in short-term ↔ Long-term</label>
-    <label class="axis-toggle"><input type="checkbox" id="ax4"> Classic approach ↔ Emerging approach</label>
+    <div class="axis-row">
+      <span class="axis-row-label">X →</span>
+      <label class="axis-toggle active" data-axis="x" data-dim="0"><input type="radio" name="xax" value="0" checked> Tangible ↔ Intangible output</label>
+      <label class="axis-toggle" data-axis="x" data-dim="1"><input type="radio" name="xax" value="1"> Community scale ↔ Global agenda</label>
+      <label class="axis-toggle" data-axis="x" data-dim="2"><input type="radio" name="xax" value="2"> Change in short-term ↔ Long-term</label>
+    </div>
+    <div class="axis-row">
+      <span class="axis-row-label">Y ↑</span>
+      <label class="axis-toggle" data-axis="y" data-dim="0"><input type="radio" name="yax" value="0"> Tangible ↔ Intangible output</label>
+      <label class="axis-toggle active" data-axis="y" data-dim="1"><input type="radio" name="yax" value="1" checked> Community scale ↔ Global agenda</label>
+      <label class="axis-toggle" data-axis="y" data-dim="2"><input type="radio" name="yax" value="2"> Change in short-term ↔ Long-term</label>
+    </div>
   </div>
   <div style="position:relative">
     <canvas id="c"></canvas>
@@ -21,34 +32,33 @@
 </div>
 
 <script>
-// dims: [tangible(0)-intangible(100), community(0)-global(100), short-change(0)-long-change(100), classic(0)-emerging(100)]
+// dims: [tangible(0)-intangible(100), community(0)-global(100), short-change(0)-long-change(100)]
 const CMPS = [
-  { n:'CMP1',  title:'Health',        dims:[50, 30, 35, 30], note:'Approach: participatory design, experience design\nChange: care interventions shift at community level' },
-  { n:'CMP2',  title:'Food',          dims:[30, 65, 60, 80], note:'Approach: biodesign, systemic design\nChange: food system shifts take time but prototypes are near-term' },
-  { n:'CMP3',  title:'Climate',       dims:[80, 90, 85, 70], note:'Approach: speculative design, GIS storytelling\nChange: climate transformation is generational' },
-  { n:'CMP4',  title:'Disaster',      dims:[45, 28, 75, 25], note:'Approach: service design, communication design\nChange: resilience is built over the long term' },
-  { n:'CMP5',  title:'Culture',       dims:[15, 18, 85, 20], note:'Approach: design anthropology, craft & product design\nChange: cultural continuity unfolds across generations' },
-  { n:'CMP6',  title:'Technology',    dims:[85, 60, 20, 90], note:'Approach: critical design, interaction design with AI\nChange: technology outputs shift behaviour quickly' },
-  { n:'CMP7',  title:'Entertainment', dims:[75, 45, 40, 72], note:'Approach: inclusive design, media design\nChange: accessible formats shift norms at medium-term' },
-  { n:'CMP8',  title:'Equity',        dims:[70, 75, 65, 58], note:'Approach: business design, social entrepreneurship\nChange: ventures launch short-term, systemic equity takes longer' },
-  { n:'CMP9',  title:'Law',           dims:[75, 70, 75, 55], note:'Approach: systemic design, policy design\nChange: legal reform is inherently long-term' },
-  { n:'CMP10', title:'Education',     dims:[35, 50, 50, 62], note:'Approach: process design, participatory workshop design\nChange: practice shifts are medium-term; systemic reform is slow' },
-  { n:'CMP11', title:'Ecosystems',    dims:[50, 55, 82, 50], note:'Approach: regenerative design, urban design\nChange: ecological transformation unfolds over long timescales' },
-  { n:'CMP12', title:'Governance',    dims:[82, 85, 72, 65], note:'Approach: data design, policy-oriented design\nChange: institutional reform is slow and structural' },
+  { n:'CMP1',  title:'Health',        dims:[50, 30, 35], note:'Outputs: service interventions, care environments, participatory tools' },
+  { n:'CMP2',  title:'Food',          dims:[30, 65, 60], note:'Outputs: fermentation objects, food prototypes, material installations' },
+  { n:'CMP3',  title:'Climate',       dims:[80, 90, 85], note:'Outputs: data visualizations, speculative scenarios, spatial narratives' },
+  { n:'CMP4',  title:'Disaster',      dims:[45, 28, 75], note:'Outputs: signage, communication systems, evacuation tools' },
+  { n:'CMP5',  title:'Culture',       dims:[15, 18, 85], note:'Outputs: crafted objects, material explorations, fabricated artifacts' },
+  { n:'CMP6',  title:'Technology',    dims:[85, 60, 20], note:'Outputs: interactive experiences, software, digital artworks' },
+  { n:'CMP7',  title:'Entertainment', dims:[75, 45, 40], note:'Outputs: interactive prototypes, experiential formats, participatory events' },
+  { n:'CMP8',  title:'Equity',        dims:[70, 75, 65], note:'Outputs: business models, social enterprise proposals, communication' },
+  { n:'CMP9',  title:'Law',           dims:[75, 70, 75], note:'Outputs: legal system maps, policy proposals, public communication tools' },
+  { n:'CMP10', title:'Education',     dims:[35, 50, 50], note:'Outputs: learning platforms, participatory workshops, spatial tools' },
+  { n:'CMP11', title:'Ecosystems',    dims:[50, 55, 82], note:'Outputs: spatial designs, 3D models, material interventions' },
+  { n:'CMP12', title:'Governance',    dims:[82, 85, 72], note:'Outputs: data visualizations, civic platforms, narrative tools' },
 ];
 
 const AXES = [
-  { id:'ax1', left:'Tangible output', right:'Intangible output', dim:0 },
-  { id:'ax2', left:'Community scale', right:'Global agenda', dim:1 },
-  { id:'ax3', left:'Change in short-term', right:'Change in long-term', dim:2 },
-  { id:'ax4', left:'Classic design approach', right:'Emerging design approach', dim:3 },
+  { left:'Tangible output', right:'Intangible output' },
+  { left:'Community scale', right:'Global agenda' },
+  { left:'Change in short-term', right:'Change in long-term' },
 ];
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 const tip = document.getElementById('tooltip');
 let W, H, PAD = 64, INNER_W, INNER_H;
-let activeAxes = [0, 1];
+let xDim = 0, yDim = 1;
 let hoveredCMP = null;
 
 function isDark() { return matchMedia('(prefers-color-scheme: dark)').matches; }
@@ -56,7 +66,15 @@ function toCanvas(x, y) {
   return { cx: PAD + (x/100)*INNER_W, cy: PAD + ((100-y)/100)*INNER_H };
 }
 function getDims(cmp) {
-  return { x: cmp.dims[activeAxes[0]??0], y: cmp.dims[activeAxes[1]??1] };
+  return { x: cmp.dims[xDim], y: cmp.dims[yDim] };
+}
+
+function syncActive() {
+  document.querySelectorAll('.axis-toggle').forEach(label => {
+    const dim = parseInt(label.dataset.dim);
+    const axis = label.dataset.axis;
+    label.classList.toggle('active', axis === 'x' ? dim === xDim : dim === yDim);
+  });
 }
 
 function draw() {
@@ -80,8 +98,7 @@ function draw() {
   ctx.beginPath(); ctx.moveTo(midX,PAD); ctx.lineTo(midX,PAD+INNER_H); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(PAD,midY); ctx.lineTo(PAD+INNER_W,midY); ctx.stroke();
 
-  const ax1 = AXES[activeAxes[0]??0];
-  const ax2 = AXES[activeAxes[1]??1];
+  const ax1 = AXES[xDim], ax2 = AXES[yDim];
   ctx.font = '11px var(--font-sans,sans-serif)';
   ctx.fillStyle = textSecondary;
   ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
@@ -137,22 +154,33 @@ function resize() {
   draw();
 }
 
-document.querySelectorAll('.axis-toggle input').forEach(el => {
+document.querySelectorAll('input[name="xax"]').forEach(el => {
   el.addEventListener('change', () => {
-    const axDef = AXES.find(a => a.id === el.id);
-    if (!axDef) return;
-    const dim = axDef.dim;
-    if (el.checked) {
-      if (activeAxes.length < 2) activeAxes.push(dim);
-      else activeAxes[activeAxes.length-1] = dim;
-    } else {
-      activeAxes = activeAxes.filter(d => d !== dim);
+    xDim = parseInt(el.value);
+    if (xDim === yDim) {
+      yDim = [0,1,2].find(d => d !== xDim);
+      document.querySelector(`input[name="yax"][value="${yDim}"]`).checked = true;
     }
-    document.querySelectorAll('.axis-toggle input').forEach(cb => {
-      const def = AXES.find(a => a.id === cb.id);
-      if (def) cb.checked = activeAxes.includes(def.dim);
-    });
-    draw();
+    syncActive(); draw();
+  });
+});
+
+document.querySelectorAll('input[name="yax"]').forEach(el => {
+  el.addEventListener('change', () => {
+    yDim = parseInt(el.value);
+    if (xDim === yDim) {
+      xDim = [0,1,2].find(d => d !== yDim);
+      document.querySelector(`input[name="xax"][value="${xDim}"]`).checked = true;
+    }
+    syncActive(); draw();
+  });
+});
+
+document.querySelectorAll('.axis-toggle').forEach(label => {
+  label.addEventListener('click', () => {
+    const input = label.querySelector('input');
+    input.checked = true;
+    input.dispatchEvent(new Event('change'));
   });
 });
 
@@ -166,9 +194,9 @@ canvas.addEventListener('mousemove', e => {
   });
   hoveredCMP = found?.n || null;
   if (found) {
-    const lines = found.note.split('\n');
-    tip.innerHTML = `<strong style="color:var(--color-text-primary)">${found.n}: ${found.title}</strong><br>${lines.map(l=>`<span style="color:var(--color-text-secondary);font-size:11px">${l}</span>`).join('<br>')}`;
-    tip.style.left = (e.clientX-rect.left+16)+'px';
+    tip.innerHTML = `<strong style="color:var(--color-text-primary)">${found.n}: ${found.title}</strong><br><span style="color:var(--color-text-secondary);font-size:11px">${found.note}</span>`;
+    const tx = e.clientX-rect.left+16;
+    tip.style.left = (tx + 200 > W ? tx - 224 : tx) + 'px';
     tip.style.top = (e.clientY-rect.top-10)+'px';
     tip.style.opacity = '1';
     canvas.style.cursor = 'pointer';
@@ -179,12 +207,6 @@ canvas.addEventListener('mousemove', e => {
   draw();
 });
 canvas.addEventListener('mouseleave', () => { tip.style.opacity='0'; hoveredCMP=null; draw(); });
-canvas.addEventListener('click', () => {
-  if (hoveredCMP) {
-    const c = CMPS.find(c=>c.n===hoveredCMP);
-    if (c) sendPrompt(`Tell me more about ${c.n} ${c.title} — what design approach does it use and what pace of change does it design for?`);
-  }
-});
 
 resize();
 window.addEventListener('resize', resize);
